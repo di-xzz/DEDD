@@ -16,7 +16,7 @@ class Step_State:
 
 class VRPEnv:
     def __init__(self, **env_params):
-        ####################################
+
         self.env_params = env_params
         self.problem_size = None
         self.data_path = env_params['data_path']
@@ -34,20 +34,20 @@ class VRPEnv:
         self.batch_size = batch_size
 
         self.problems_nodes = self.raw_data_nodes[episode:episode + batch_size]
-        # shape (B,V+1,2)
+
         self.Batch_demand = self.raw_data_demand[episode:episode + batch_size]
-        # shape (B,V+1)
+
 
         self.Batch_capacity = self.raw_data_capacity[episode:episode + batch_size]
 
         self.solution = self.raw_data_node_flag[episode:episode + batch_size]
-        # shape (B,V,2)
+
         self.Batch_capacity = self.Batch_capacity[:,None].repeat(1,self.solution.shape[1]+1)
-        # shape (B,V+1)
+
 
         self.problems = torch.cat((self.problems_nodes,self.Batch_demand[:,:,None],
                                    self.Batch_capacity[:,:,None]),dim=2)
-        # shape (B,V+1,4)
+
 
         if self.sub_path:
             self.problems, self.solution = self.sampling_subpaths(self.problems, self.solution)
@@ -63,10 +63,7 @@ class VRPEnv:
             index = torch.arange(solution.shape[1]).roll(shifts=1)
             solution[:, :, 1] = solution[:, index, 1]
 
-        # 1.
-        # find the number of subtours in each instance.
-        # the total number of subpaths in all instances:     all_subtour_num，
-        # The longest length in a subpath among all instances:  max_subtour_length
+
         batch_size = solution.shape[0]
         problem_size = solution.shape[1]
 
@@ -85,11 +82,6 @@ class VRPEnv:
 
         max_subtour_length = torch.max(sub_tours_length)
 
-        # 2。
-        # For each subpath, take it out separately, pandding 0 to length max_subtour_length
-        #For each instance, padding 0 to max_subtour_num number of subpaths
-        # 3.
-        # Put all subpaths of all instances into the same array
 
         start_from_depot2 = solution[:, :, 1].nonzero()
         start_from_depot3 = solution[:, :, 1].roll(shifts=-1, dims=1).nonzero()
@@ -113,20 +105,14 @@ class VRPEnv:
 
         sub_tours_padding = sub_tourss[x5].reshape(all_subtour_num, max_subtour_length)
 
-        # 4.
-        # For each row, a random number of [0,100] is generated, greater than 50 is positive and less than 50 is inverse
 
         clockwise_or_not = torch.rand(len(sub_tours_padding))
 
         clockwise_or_not_bool = clockwise_or_not.le(0.5)
 
-        # 5.
-        # For each row, randomly flip
 
         sub_tours_padding[clockwise_or_not_bool] = torch.flip(sub_tours_padding[clockwise_or_not_bool], dims=[1])
 
-        # 6。
-        # Map the subtours to the original solution matrix dimension
         sub_tourss_back = sub_tourss
 
         sub_tourss_back[x5] = sub_tours_padding.ravel()
@@ -153,7 +139,7 @@ class VRPEnv:
         visit_depot_num = solution[:,:,1].sum(1)
         min_length = torch.min(visit_depot_num)
 
-        first_node_index = torch.randint(low=0, high=min_length, size=[1])[0]  # in [0,N)
+        first_node_index = torch.randint(low=0, high=min_length, size=[1])[0]
 
         temp_tri = np.triu(np.ones((len(visit_depot_num), len(visit_depot_num))), k=1)
         visit_depot_num_numpy = visit_depot_num.clone().cpu().numpy()
@@ -180,25 +166,19 @@ class VRPEnv:
 
 
     def sampling_subpaths(self, problems, solution, length_fix=False):
-        # problems shape (B,V+1,4)
-        # solution shape (B,V,2)
 
-        # step：
-        # 1.Extract subtour
 
         problems_size = problems.shape[1] - 1
 
         batch_size = problems.shape[0]
         embedding_size = problems.shape[2]
 
-        # the first node of subpath: uniform sampling, from 0 to N
-        # 1.1
-        length_of_subpath = torch.randint(low=4, high=problems_size + 1, size=[1])[0]  # in [4,V]
+
+        length_of_subpath = torch.randint(low=4, high=problems_size + 1, size=[1])[0]
 
         solution = self.vrp_whole_and_solution_subrandom_inverse(solution)
         solution = self.vrp_whole_and_solution_subrandom_shift_V2inverse(solution)
-        # 1.3
-        #  Find the points that start from deopt, and then subtract 1 to get the point that ends with depot
+
 
         start_from_depot = solution[:, :, 1].nonzero()
 
@@ -206,7 +186,7 @@ class VRPEnv:
         end_with_depot[:, 1] = end_with_depot[:, 1] - 1
         end_with_depot[end_with_depot.le(-0.5)] = solution.shape[1] - 1
 
-        # 1.4
+
         visit_depot_num = torch.sum(solution[:, :, 1], dim=1)
 
         p = torch.rand(len(visit_depot_num))
@@ -221,10 +201,8 @@ class VRPEnv:
         temp_index_torch = torch.from_numpy(temp_index).long().cuda()
         select_end_with_depot_node_index_ = select_end_with_depot_node_index + temp_index_torch
 
-        # This is the point at which each instance is randomly selected with an end with depot
         select_end_with_depot_node = end_with_depot[select_end_with_depot_node_index_, 1]
 
-        # 1.5
         double_solution = torch.cat((solution, solution), dim=1)
 
         select_end_with_depot_node = select_end_with_depot_node + problems_size
@@ -244,7 +222,6 @@ class VRPEnv:
         index_3 = index_1 + index_2
         sub_solution = sub_tour[index_3, :, :]
 
-        # Calculate the capacity of the first point
 
         offset_index = problems.shape[0]
         start_index = indexxxx[:,0]
@@ -252,7 +229,7 @@ class VRPEnv:
         x1_cpu = torch.arange(double_solution[:offset_index, :, 1].shape[1])
         x1_gpu = x1_cpu.cuda()
         x1 = x1_gpu <= start_index[:offset_index][:, None]
-        # x1 = torch.arange(double_solution[:offset_index,:,1].shape[1])<=start_index[:offset_index][:,None]
+
 
         start_capacity = 0
         before_is_via_depot_all = double_solution[:offset_index,:,1]*x1
@@ -275,11 +252,11 @@ class VRPEnv:
         x2_cpu = torch.arange(double_solution[:offset_index, :, 1].shape[1])
         x2_gpu = x2_cpu.cuda()
         x2 = x2_gpu <start_index[:offset_index][:, None]
-        # x2 = torch.arange(double_solution[:offset_index, :, 1].shape[1]) <start_index[:offset_index][:, None]
+
         x3_cpu = torch.arange(double_solution[:offset_index, :, 1].shape[1])
         x3_gpu = x3_cpu.cuda()
         x3 = x3_gpu >=before_start_index[:, None]
-        # x3 = torch.arange(double_solution[:offset_index, :, 1].shape[1]) >=before_start_index[:, None]
+
         x4 = x2 * x3
 
         a = torch.arange(offset_index)
@@ -290,24 +267,18 @@ class VRPEnv:
         self.satisfy_demand = before_demand.sum(1)
 
         problems[:offset_index,:,3] = problems[:offset_index,:,3] - self.satisfy_demand[:,None]
-        # -----------------------------
-        # 2. Update the subtour's index
-        # -----------------------------
 
-        # 2.1
         sub_solution_node = sub_solution[:, :, 0]
 
-        new_sulution_ascending, rank = torch.sort(sub_solution_node, dim=-1, descending=False)  # 升序
-        _, new_sulution_rank = torch.sort(rank, dim=-1, descending=False)  # 升序
+        new_sulution_ascending, rank = torch.sort(sub_solution_node, dim=-1, descending=False)
+        _, new_sulution_rank = torch.sort(rank, dim=-1, descending=False)
         sub_solution[:, :, 0] = new_sulution_rank+1
-
-        # 2.2
 
         index_2, _ = torch.cat((new_sulution_ascending, new_sulution_ascending, new_sulution_ascending, new_sulution_ascending), dim=1). \
             type(torch.long).sort(dim=-1, descending=False)
 
-        index_1 = torch.arange(batch_size, dtype=torch.long)[:, None].expand(batch_size, index_2.shape[1])  # shape: [B, 2current_step]
-        temp = torch.arange((embedding_size), dtype=torch.long)[None, :].expand(batch_size, embedding_size)  # shape: [B, current_step]
+        index_1 = torch.arange(batch_size, dtype=torch.long)[:, None].expand(batch_size, index_2.shape[1])
+        temp = torch.arange((embedding_size), dtype=torch.long)[None, :].expand(batch_size, embedding_size)
         index_3 = temp.repeat([1, length_of_subpath])
 
         new_data = problems[index_1, index_2, index_3].view(batch_size, length_of_subpath, embedding_size)
@@ -316,7 +287,7 @@ class VRPEnv:
         return new_data, sub_solution
 
     def shuffle_data(self):
-        # shuffle the training set data
+
         index = torch.randperm(len(self.raw_data_nodes)).long()
         self.raw_data_nodes = self.raw_data_nodes[index]
         self.raw_data_capacity = self.raw_data_capacity[index]
@@ -333,7 +304,6 @@ class VRPEnv:
                 tow_col_node_flag.append([node_flag[i], node_flag[V + i]])
             return tow_col_node_flag
 
-        # Because the dataset is too large, I split it into two reads
 
         if self.env_params['mode']=='train':
 
@@ -362,7 +332,7 @@ class VRPEnv:
                     demand = [int(line[idx]) for idx in range(demand_index + 1, cost_index)]
                 else:
                     demand = [0] + [int(line[idx]) for idx in range(demand_index + 1, cost_index)]
-                # Include depot's demand, which is 0, in the first
+
 
                 cost = float(line[cost_index + 1])
                 node_flag = [int(line[idx]) for idx in range(node_flag_index + 1, len(line))]
@@ -374,15 +344,14 @@ class VRPEnv:
                 self.raw_data_node_flag_1.append(node_flag)
 
             self.raw_data_nodes_1 = torch.tensor(self.raw_data_nodes_1, requires_grad=False)
-            # shape (B,V+1,2)  customer num + depot
+
             self.raw_data_capacity_1 = torch.tensor(self.raw_data_capacity_1, requires_grad=False)
-            # shape (B )
+
             self.raw_data_demand_1 = torch.tensor(self.raw_data_demand_1, requires_grad=False)
-            # shape (B,V+1) customer num + depot
+
             self.raw_data_cost_1 = torch.tensor(self.raw_data_cost_1, requires_grad=False)
-            # shape (B )
+
             self.raw_data_node_flag_1 = torch.tensor(self.raw_data_node_flag_1, requires_grad=False)
-            # shape (B,V,2)
 
             self.raw_data_nodes_2 = []
             self.raw_data_capacity_2 = []
@@ -422,15 +391,15 @@ class VRPEnv:
                 self.raw_data_node_flag_2.append(node_flag)
 
             self.raw_data_nodes_2 = torch.tensor(self.raw_data_nodes_2, requires_grad=False)
-            # shape (B,V+1,2)  customer num + depot
+
             self.raw_data_capacity_2 = torch.tensor(self.raw_data_capacity_2, requires_grad=False)
-            # shape (B )
+
             self.raw_data_demand_2 = torch.tensor(self.raw_data_demand_2, requires_grad=False)
-            # shape (B,V+1) customer num + depot
+
             self.raw_data_cost_2 = torch.tensor(self.raw_data_cost_2, requires_grad=False)
-            # shape (B )
+
             self.raw_data_node_flag_2 = torch.tensor(self.raw_data_node_flag_2, requires_grad=False)
-            # shape (B,V,2)
+
 
             self.raw_data_nodes = torch.cat((self.raw_data_nodes_1,self.raw_data_nodes_2),dim=0)
             self.raw_data_capacity = torch.cat((self.raw_data_capacity_1, self.raw_data_capacity_2), dim=0)
@@ -478,15 +447,15 @@ class VRPEnv:
                 self.raw_data_node_flag.append(node_flag)
 
             self.raw_data_nodes = torch.tensor(self.raw_data_nodes, requires_grad=False)
-            # shape (B,V+1,2)  customer num + depot
+
             self.raw_data_capacity = torch.tensor(self.raw_data_capacity, requires_grad=False)
-            # shape (B )
+
             self.raw_data_demand = torch.tensor(self.raw_data_demand, requires_grad=False)
-            # shape (B,V+1) customer num + depot
+
             self.raw_data_cost = torch.tensor(self.raw_data_cost, requires_grad=False)
-            # shape (B )
+
             self.raw_data_node_flag = torch.tensor(self.raw_data_node_flag, requires_grad=False)
-            # shape (B,V,2)
+
 
         print(f'load raw dataset done!', )
 
@@ -513,17 +482,12 @@ class VRPEnv:
 
         self.selected_count += 1
 
-        gather_index = selected[:, None, None].expand((len(selected), 1, 4)) # shape [B,1,4]
+        gather_index = selected[:, None, None].expand((len(selected), 1, 4))
 
-        # --------------------
 
-        # Update capacity
-        # 1. If flag = 1, the vehicle returns to depot and capacity is refilled
         is_depot = selected_flag_teacher==1
         self.problems[is_depot, :, 3] =  self.raw_data_capacity.ravel()[0].item()
 
-        # 2. If capacity is less than demand, capacity is also refilled and the flag of the current access node is changed to 1
-        # self.problems = self.problems.cpu()
         gather_index = gather_index.cuda()
         self.current_node_temp = self.problems.gather(index=gather_index, dim=1).squeeze(1)
         demands = self.current_node_temp[:,2]
@@ -532,28 +496,20 @@ class VRPEnv:
         selected_flag_teacher[smaller_] = 1
         self.problems[smaller_, :, 3] =  self.raw_data_capacity.ravel()[0].item()
 
-        # 3. Subtract the demand of the currently visited node regardless of whether the vehicle is returned to depot to refill
-
         self.problems[:,:,3] =  self.problems[:,:,3]- demands[:,None]
-
-        # --------------------
 
 
         self.selected_node_list = torch.cat((self.selected_node_list, selected[:, None]), dim=1)
 
         self.selected_teacher_flag = torch.cat((self.selected_teacher_flag, selected_flag_teacher[:, None]), dim=1)
 
-        # selected_student = selected_student.cpu()
         self.selected_student_list = torch.cat((self.selected_student_list, selected_student[:, None]), dim=1)
 
-        # selected_flag_student = selected_flag_student.cpu()
         self.selected_student_flag = torch.cat((self.selected_student_flag, selected_flag_student[:, None]), dim=1)
 
-
-        # returning values
         done = (self.selected_count == self.problems.shape[1]-1)
         if done:
-            reward, reward_student = self._get_travel_distance()  # note the minus sign!
+            reward, reward_student = self._get_travel_distance()
         else:
             reward, reward_student = None, None
 
@@ -566,9 +522,7 @@ class VRPEnv:
         return
 
     def drawPic_VRP(self, coor_, order_node_,order_flag_,name='xx',):
-        # coor: shape (V,2)
-        # order_node_: shape (V)
-        # order_flag_: shape (V)
+
 
         coor = coor_.clone().cpu().numpy()
         order_node =  order_node_.clone().cpu().numpy()
@@ -596,7 +550,7 @@ class VRPEnv:
         plt.scatter(arr[0, 0], arr[0, 1], color='red', linewidth=15,marker='v')
 
         col_counter = order_flag.sum()
-        colors = plt.cm.turbo(np.linspace(0, 1, col_counter)) # turbo
+        colors = plt.cm.turbo(np.linspace(0, 1, col_counter))
         np.random.seed(123)
         np.random.shuffle(colors)
 
@@ -609,7 +563,7 @@ class VRPEnv:
 
             start = [arr[tour[i], 0], arr[tour[i + 1], 0]]
             end = [arr[tour[i], 1], arr[tour[i + 1], 1]]
-            plt.plot(start, end, color=colors[count], linewidth=3)  # ,linestyle ="dashed"
+            plt.plot(start, end, color=colors[count], linewidth=3)
 
             plt.scatter(arr[tour[i], 0], arr[tour[i], 1], color='gray', linewidth=2)
             plt.scatter(arr[tour[i+1], 0], arr[tour[i+1], 1], color='gray', linewidth=2)
@@ -618,12 +572,10 @@ class VRPEnv:
         path = b+'/figure'
         self.make_dir(path)
         plt.savefig(path+f'/{name}.pdf',bbox_inches='tight', pad_inches=0)
-        # plt.show()
+
 
     def cal_length(self, problems, order_node, order_flag):
-        # problems:   [B,V+1,2]
-        # order_node: [B,V]
-        # order_flag: [B,V]
+
         order_node_ = order_node.clone()
 
         order_flag_ = order_flag.clone()
@@ -639,22 +591,22 @@ class VRPEnv:
         problem_size = problems.shape[1] - 1
 
         order_gathering_index = order_node_.unsqueeze(2).expand(-1, problem_size, 2)
-        # order_gathering_index = order_gathering_index.cpu()
+
         order_loc = problems.gather(dim=1, index=order_gathering_index)
 
         roll_gathering_index = roll_node.unsqueeze(2).expand(-1, problem_size, 2)
-        # roll_gathering_index = roll_gathering_index.cpu()
+
         roll_loc = problems.gather(dim=1, index=roll_gathering_index)
 
         flag_gathering_index = order_flag_.unsqueeze(2).expand(-1, problem_size, 2)
-        # flag_gathering_index = flag_gathering_index.cpu()
+
         flag_loc = problems.gather(dim=1, index=flag_gathering_index)
 
         order_lengths = ((order_loc - flag_loc) ** 2)
 
         order_flag_[:,0]=0
         flag_gathering_index = order_flag_.unsqueeze(2).expand(-1, problem_size, 2)
-        # flag_gathering_index = flag_gathering_index.cpu()
+
         flag_loc = problems.gather(dim=1, index=flag_gathering_index)
 
         roll_lengths = ((roll_loc - flag_loc) ** 2)
@@ -664,20 +616,16 @@ class VRPEnv:
         return length
 
     def cal_length1(self, problems, order_node, order_flag):
-        # problems:   [B,V+1,2]
-        # order_node: [B,V]
-        # order_flag: [B,V]
+
         order_node_ = order_node.clone()
 
         order_flag_ = order_flag.clone()
 
-        # 把flag中0元素和1元素的索引找出来
         index_small = torch.le(order_flag_, 0.5)
         index_bigger = torch.gt(order_flag_, 0.5)
 
-        # 0元素的位置赋上order_node的值
         order_flag_[index_small] = order_node_[index_small]
-        # 1元素的位置上置0
+
         order_flag_[index_bigger] = 0
 
         roll_node = order_node_.roll(dims=1, shifts=1)
@@ -685,22 +633,22 @@ class VRPEnv:
         problem_size = order_node.shape[1]
 
         order_gathering_index = order_node_.unsqueeze(2).expand(-1, problem_size, 2)
-        # order_gathering_index = order_gathering_index.cpu()
+
         order_loc = problems.gather(dim=1, index=order_gathering_index)
 
         roll_gathering_index = roll_node.unsqueeze(2).expand(-1, problem_size, 2)
-        # roll_gathering_index = roll_gathering_index.cpu()
+
         roll_loc = problems.gather(dim=1, index=roll_gathering_index)
 
         flag_gathering_index = order_flag_.unsqueeze(2).expand(-1, problem_size, 2)
-        # flag_gathering_index = flag_gathering_index.cpu()
+
         flag_loc = problems.gather(dim=1, index=flag_gathering_index)
 
         order_lengths = ((order_loc - flag_loc) ** 2)
 
         order_flag_[:,0]=0
         flag_gathering_index = order_flag_.unsqueeze(2).expand(-1, problem_size, 2)
-        # flag_gathering_index = flag_gathering_index.cpu()
+
         flag_loc = problems.gather(dim=1, index=flag_gathering_index)
 
         roll_lengths = ((roll_loc - flag_loc) ** 2)
@@ -711,22 +659,17 @@ class VRPEnv:
 
     def _get_travel_distance(self):
 
-        # teacher's length
         problems = self.problems[:,:,[0,1]]
         order_node = self.solution[:,:,0]
         order_flag = self.solution[:,:,1]
         travel_distances = self.cal_length( problems, order_node, order_flag)
-        # self.drawPic_VRP(problems[0,:,:], order_node[0],order_flag[0],name='teather')
 
-        # trained model's distance
         problems = self.problems[:, :, [0, 1]]
         order_node = self.selected_student_list.clone()
         order_flag = self.selected_student_flag.clone()
 
         travel_distances_student = self.cal_length(problems, order_node, order_flag)
 
-        # draw figure， validate the result.
-        # self.drawPic_VRP(problems[0,:,:], order_node[0],order_flag[0],name='student')
 
         return -travel_distances, -travel_distances_student
 
@@ -752,18 +695,14 @@ class VRPEnv:
 
 
     def sampling_subpaths_repair(self, problems, solution, length_fix=False, mode='test', repair=True):
-        # problems shape (B,V+1,4)
-        # solution shape (B,V,2) index从1开始
+
 
         problems_size = problems.shape[1] - 1
-        # print('problems_size',problems_size)
+
         batch_size = problems.shape[0]
         embedding_size = problems.shape[2]
 
-        # the first node of subpath: uniform sampling, from 0 to N
-        # 1.1
-
-        length_of_subpath = torch.randint(low=4, high=problems_size+1 , size=[1])[0]  # in [4,N]
+        length_of_subpath = torch.randint(low=4, high=problems_size+1 , size=[1])[0]
 
         start_from_depot = solution[:, :, 1].nonzero()
 
@@ -771,7 +710,6 @@ class VRPEnv:
         end_with_depot[:, 1] = end_with_depot[:, 1] - 1
         end_with_depot[end_with_depot.le(-0.5)] = solution.shape[1] - 1
 
-        # 1.4
         visit_depot_num = torch.sum(solution[:, :, 1], dim=1)
 
         p = torch.rand(len(visit_depot_num))
@@ -787,7 +725,7 @@ class VRPEnv:
         select_end_with_depot_node_index_ = select_end_with_depot_node_index + temp_index_torch
 
         select_end_with_depot_node = end_with_depot[select_end_with_depot_node_index_, 1]
-        # 1.5
+
         double_solution = torch.cat((solution, solution), dim=1)
 
         select_end_with_depot_node = select_end_with_depot_node + problems_size
@@ -839,20 +777,17 @@ class VRPEnv:
 
         problems[:offset_index, :, 3] = problems[:offset_index, :, 3] - self.satisfy_demand[:, None]
 
-        # -----------------------------
-        # 2.
-        # -----------------------------
-        # 2.1
+
         sub_solution_node = sub_solution[:, :, 0]
-        new_sulution_ascending, rank = torch.sort(sub_solution_node, dim=-1, descending=False)  # 升序
-        _, new_sulution_rank = torch.sort(rank, dim=-1, descending=False)  # 升序
+        new_sulution_ascending, rank = torch.sort(sub_solution_node, dim=-1, descending=False)
+        _, new_sulution_rank = torch.sort(rank, dim=-1, descending=False)
         sub_solution[:, :, 0] = new_sulution_rank + 1
-        # 2.2
+
         index_2, _ = torch.cat((new_sulution_ascending, new_sulution_ascending, new_sulution_ascending, new_sulution_ascending), dim=1). \
             type(torch.long).sort(dim=-1, descending=False)
 
-        index_1 = torch.arange(batch_size, dtype=torch.long)[:, None].expand(batch_size, index_2.shape[1])  # shape: [B, 2current_step]
-        temp = torch.arange((embedding_size), dtype=torch.long)[None, :].expand(batch_size, embedding_size)  # shape: [B, current_step]
+        index_1 = torch.arange(batch_size, dtype=torch.long)[:, None].expand(batch_size, index_2.shape[1])
+        temp = torch.arange((embedding_size), dtype=torch.long)[None, :].expand(batch_size, embedding_size)
         index_3 = temp.repeat([1, length_of_subpath])
 
         new_data = problems[index_1, index_2, index_3].view(batch_size, length_of_subpath, embedding_size)
@@ -880,17 +815,15 @@ class VRPEnv:
 
         if_begin_flag_legal = (order_flag[:,0]!=1).any()
 
-        # 0.
+
         if if_begin_flag_legal:
             assert False, 'e1: wrong begin_flag_legal!'
 
-        # 1. Determine whether each index of the solution node list is unique
+
         uniques = torch.unique(order_node[0])
         if len(uniques) != problem.shape[1] - 1:
             assert False, 'e2: wrong node list!'
 
-
-        # 2. Find the demand for each sub tour and determine whether it exceeds capacity
 
         batch_size = solution.shape[0]
 
@@ -911,7 +844,6 @@ class VRPEnv:
 
         max_subtour_length = torch.max(sub_tours_length)
 
-        # 2。
 
 
         start_from_depot2 = solution[:, :, 1].nonzero()
@@ -936,8 +868,6 @@ class VRPEnv:
 
         sub_tours_padding = sub_tourss[x5].reshape(all_subtour_num, max_subtour_length)
 
-        ########################----------
-        ########################----------
 
         demands = torch.repeat_interleave(demand, repeats=visit_depot_num, dim=0)
 
