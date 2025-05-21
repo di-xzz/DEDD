@@ -10,7 +10,6 @@ from tqdm import tqdm
 @dataclass
 class Reset_State:
     problems: torch.Tensor
-    # shape: (batch, problem, 2)
 
 
 @dataclass
@@ -36,20 +35,20 @@ class TSPEnv:
         self.episode = None
 
 
-    # 处理原始数据集
+
     def load_problems(self, episode, batch_size):
         self.episode = episode
 
         self.batch_size = batch_size
 
         self.problems, self.solution = self.raw_data_nodes[episode:episode + batch_size], self.raw_data_tours[episode:episode + batch_size]
-        # shape: [B,V,2]  ;  shape: [B,V]
+
 
         if self.sub_path:
             self.problems, self.solution = self.sampling_subpaths(self.problems, self.solution,mode='train')
 
         if_inverse = True
-        if_inverse_index = torch.randint(low=0, high=100, size=[1])[0]  # in [4,N]
+        if_inverse_index = torch.randint(low=0, high=100, size=[1])[0]
         if if_inverse_index < 50:
             if_inverse = False
 
@@ -59,40 +58,34 @@ class TSPEnv:
         self.problem_size = self.problems.shape[1]
 
 
-    # 从完整解中采样得到部分解
+
     def sampling_subpaths(self, problems, solution, length_fix=False, mode='test', repair=False):
 
         problems_size = problems.shape[1]
         batch_size = problems.shape[0]
         embedding_size = problems.shape[2]
 
-        first_node_index = torch.randint(low=0, high=problems_size, size=[1])[0]  # in [0,N)
+        first_node_index = torch.randint(low=0, high=problems_size, size=[1])[0]
 
-        # length of subpath: uniform sampling, from 4 to N
+
         if mode == 'test':
 
-            length_of_subpath = torch.randint(low=4, high=problems_size + 1, size=[1])[0]  # in [4,N]
+            length_of_subpath = torch.randint(low=4, high=problems_size + 1, size=[1])[0]
         else:
             if length_fix:
                 length_of_subpath = problems_size
             else:
-                length_of_subpath = torch.randint(low=4, high=problems_size + 1, size=[1])[0]  # in [4,N]
+                length_of_subpath = torch.randint(low=4, high=problems_size + 1, size=[1])[0]
 
-        # -----------------------------
-        # new_sulution
-        # -----------------------------
         double_solution = torch.cat([solution, solution], dim=-1)
         new_sulution = double_solution[:, first_node_index: first_node_index + length_of_subpath]
-        new_sulution_ascending, rank = torch.sort(new_sulution, dim=-1, descending=False)  # 升序
-        _, new_sulution_rank = torch.sort(rank, dim=-1, descending=False)  # 升序
+        new_sulution_ascending, rank = torch.sort(new_sulution, dim=-1, descending=False)
+        _, new_sulution_rank = torch.sort(rank, dim=-1, descending=False)
 
-        # -----------------------------
-        # new_problems
-        # -----------------------------
         index_2, _ = torch.cat((new_sulution_ascending, new_sulution_ascending), dim=1).type(torch.long).sort(dim=-1,
-                                                                                                              descending=False)  # shape: [B, 2current_step]
-        index_1 = torch.arange(batch_size, dtype=torch.long)[:, None].expand(batch_size, index_2.shape[1])  # shape: [B, 2current_step]
-        temp = torch.arange((embedding_size), dtype=torch.long)[None, :].expand(batch_size, embedding_size)  # shape: [B, current_step]
+                                                                                                              descending=False)
+        index_1 = torch.arange(batch_size, dtype=torch.long)[:, None].expand(batch_size, index_2.shape[1])
+        temp = torch.arange((embedding_size), dtype=torch.long)[None, :].expand(batch_size, embedding_size)
         index_3 = temp.repeat([1, length_of_subpath])
 
         new_data = problems[index_1, index_2, index_3].view(batch_size, length_of_subpath, 2)
@@ -103,14 +96,13 @@ class TSPEnv:
             return new_data, new_sulution_rank
 
 
-    # 用于对数据进行随机洗牌
+
     def shuffle_data(self):
         index = torch.randperm(len(self.raw_data_nodes)).long()
         self.raw_data_nodes = self.raw_data_nodes[index]
         self.raw_data_tours = self.raw_data_tours[index]
 
 
-    # 加载原始数据
     def load_raw_data(self, episode,begin_index=0):
 
         print('load raw dataset begin!')
@@ -132,7 +124,7 @@ class TSPEnv:
         print(f'load raw dataset done!', )
 
 
-    # 破坏完整解
+
     def destroy_solution(self, problem, complete_solution):
 
 
@@ -142,7 +134,6 @@ class TSPEnv:
         partial_solution_length = self._get_travel_distance_2(self.problems, self.solution)
         return partial_solution_length,first_node_index,length_of_subpath,double_solution
 
-    # 重置一些变量
     def reset(self, mode,):
 
         self.selected_count = 0
@@ -164,17 +155,16 @@ class TSPEnv:
 
     def step(self, selected, selected_student):
 
-        self.selected_count += 1  # 已访问的节点数+1
+        self.selected_count += 1
 
-        # 当前被选择的节点，加入已选节点列表
-        self.selected_node_list = torch.cat((self.selected_node_list, selected[:, None]), dim=1)  # shape: [B, current_step]
+
+        self.selected_node_list = torch.cat((self.selected_node_list, selected[:, None]), dim=1)
 
         self.selected_student_list = torch.cat((self.selected_student_list, selected_student[:, None]), dim=1)
 
 
-        # 检查是否生成完整的解
         done = (self.selected_count == self.problems.shape[1])
-        if done:  # 生成一个完整解后，返回这个解的总距离作为reward
+        if done:
             reward, reward_student = self._get_travel_distance()
         else:
             reward, reward_student = None, None
@@ -228,15 +218,15 @@ class TSPEnv:
         travel_distances = segment_lengths.sum(1)
 
 
-        # trained model's distance
+
         gathering_index_student = self.selected_student_list.unsqueeze(2).expand(-1, self.problems.shape[1], 2)
         ordered_seq_student = self.problems.gather(dim=1, index=gathering_index_student.long())
         rolled_seq_student = ordered_seq_student.roll(dims=1, shifts=-1)
         segment_lengths_student = ((ordered_seq_student - rolled_seq_student) ** 2)
         segment_lengths_student = segment_lengths_student.sum(2).sqrt()
-        # shape: (batch,problem)
+
         travel_distances_student = segment_lengths_student.sum(1)
-        # shape: (batch)
+
         return travel_distances, travel_distances_student
 
 
@@ -262,11 +252,11 @@ class TSPEnv:
     def _get_travel_distance_3(self, problems, previous_node, current_node):
         previous_node = torch.unsqueeze(previous_node, 1)
         pre_node_gathering_index = previous_node.unsqueeze(2).expand(problems.shape[0], problems.shape[1], 2)
-        previous_node_coor = problems.gather(dim=1, index=pre_node_gathering_index.long())  # [10000, 100, 2]
+        previous_node_coor = problems.gather(dim=1, index=pre_node_gathering_index.long())
 
         current_node = torch.unsqueeze(current_node, 1)
         current_node_gathering_index = current_node.unsqueeze(2).expand(problems.shape[0], problems.shape[1], 2)
-        current_node_coor = problems.gather(dim=1, index=current_node_gathering_index)  # [10000,100,2]
+        current_node_coor = problems.gather(dim=1, index=current_node_gathering_index)
 
         segment_lengths = ((previous_node_coor - current_node_coor) ** 2)
 

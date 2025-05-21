@@ -2,18 +2,15 @@ DEBUG_MODE = False
 USE_CUDA = not DEBUG_MODE
 CUDA_DEVICE_NUM = 0
 
-# Path Config
 import os
 import sys
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, "..")
 sys.path.insert(0, "../..")
 import logging
-from LEHD.utils.utils import create_logger, copy_all_src
-from LEHD.CVRP.VRPTrainer import VRPTrainer as Trainer
+from DEDD.utils.utils import create_logger, copy_all_src
+from DEDD.CVRP.VRPTrainer import VRPTrainer as Trainer
 
-##########################################################################################
-# parameters
 b = os.path.abspath(".").replace('\\', '/')
 
 training_data_path = b + '/data/vrp100_hgs_train_100w.txt'
@@ -63,9 +60,9 @@ trainer_params = {
                },
                },
     'model_load': {
-        'enable': True ,  # enable loading pre-trained model
-        'path': 'result/20240418_105905_train',  # directory path of pre-trained model and log files saved.
-        'epoch': 58,  # epoch version of pre-trained model to laod.
+        'enable': True ,
+        'path': 'result/20240418_105905_train',
+        'epoch': 58,
                   }
     }
 
@@ -76,8 +73,6 @@ logger_params = {
     }
 }
 
-##########################################################################################
-# main
 
 def main():
     if DEBUG_MODE:
@@ -111,7 +106,7 @@ def _print_config():
     [logger.info(g_key + "{}".format(globals()[g_key])) for g_key in globals().keys() if g_key.endswith('params')]
 
 
-##########################################################################################
+
 
 if __name__ == "__main__":
     main()

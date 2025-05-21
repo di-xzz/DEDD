@@ -1,10 +1,10 @@
 import random
 from logging import getLogger
 import torch
-from LEHD.CVRP.VRPModel import VRPModel as Model
-from LEHD.CVRP.VRPEnv import VRPEnv as Env
-from LEHD.utils.utils import *
-# os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+from DEDD.CVRP.VRPModel import VRPModel as Model
+from DEDD.CVRP.VRPEnv import VRPEnv as Env
+from DEDD.utils.utils import *
+
 
 class VRPTester():
     def __init__(self,
@@ -12,16 +12,13 @@ class VRPTester():
                  model_params,
                  tester_params):
 
-        # save arguments
         self.env_params = env_params
         self.model_params = model_params
         self.tester_params = tester_params
 
-        # result folder, logger
         self.logger = getLogger(name='trainer')
         self.result_folder = get_result_folder()
 
-        # cuda
         USE_CUDA = self.tester_params['use_cuda']
         if USE_CUDA:
             cuda_device_num = self.tester_params['cuda_device_num']
@@ -33,17 +30,14 @@ class VRPTester():
             torch.set_default_tensor_type('torch.FloatTensor')
         self.device = device
 
-        # ENV and MODEL
         self.env = Env(**self.env_params)
         self.model = Model(**self.model_params)
 
-        # Restore
         model_load = tester_params['model_load']
         checkpoint_fullname = '{path}/checkpoint-{epoch}.pt'.format(**model_load)
         checkpoint = torch.load(checkpoint_fullname, map_location=device)
         self.model.load_state_dict(checkpoint['model_state_dict'])
 
-        # utility
         self.time_estimator = TimeEstimator()
         self.time_estimator_2 = TimeEstimator()
 
@@ -96,9 +90,6 @@ class VRPTester():
 
             episode += batch_size
 
-            ############################
-            # Logs
-            ############################
             elapsed_time_str, remain_time_str = self.time_estimator.get_est_string(episode, test_num_episode)
             self.logger.info("episode {:3d}/{:3d}, Elapsed[{}], Remain[{}], Score_teacher:{:.4f}, Score_studetnt: {:.4f}".format(
                 episode, test_num_episode, elapsed_time_str, remain_time_str, score_teacher, score_student))
@@ -160,7 +151,6 @@ class VRPTester():
 
         torch.manual_seed(random_seed)
 
-        ###############################################
         self.model.eval()
 
         with torch.no_grad():
@@ -171,7 +161,7 @@ class VRPTester():
 
             current_step = 0
 
-            state, reward, reward_student, done = self.env.pre_step()  # state: data, first_node = current_node
+            state, reward, reward_student, done = self.env.pre_step()
 
             self.origin_problem = self.env.problems.clone().detach()
 
@@ -186,7 +176,7 @@ class VRPTester():
                 _, _, selected_teacher, selected_flag_teacher, selected_teacher2, selected_flag_teacher2, \
                     selected_student, selected_student1, selected_flag_student, selected_flag_student1 = \
                     self.model(state, self.env.selected_node_list, self.env.solution, current_step,
-                               raw_data_capacity=self.env.raw_data_capacity)  # 更新被选择的点和概率
+                               raw_data_capacity=self.env.raw_data_capacity)
 
                 if current_step == 0:
                     selected_flag_teacher = torch.ones(B_V, dtype=torch.int)
@@ -213,7 +203,6 @@ class VRPTester():
 
             print('Get first complete solution!')
 
-            # 1. The complete solution is obtained
             best_select_node_list = torch.cat((self.env.selected_student_list.reshape(batch_size, -1, 1),
                                                self.env.selected_student_flag.reshape(batch_size, -1, 1)), dim=2)
 
@@ -226,9 +215,8 @@ class VRPTester():
             current_best_length.mean().item(), self.optimal_length.mean().item()))
 
 
-            ####################################################
 
-            budget = self.env_params['RRC_budget']
+            budget = self.env_params['DR_budget']
 
             for bbbb in range(budget):
                 torch.cuda.empty_cache()
@@ -237,7 +225,6 @@ class VRPTester():
 
                 self.env.load_problems(episode, batch_size)
 
-                # 2. Sample the partial solution
 
                 best_select_node_list = self.env.vrp_whole_and_solution_subrandom_inverse(best_select_node_list)
 
@@ -252,9 +239,8 @@ class VRPTester():
 
                 reset_state, _, _ = self.env.reset(self.env_params['mode'])
 
-                state, reward, reward_student, done = self.env.pre_step()  # state: data, first_node = current_node
+                state, reward, reward_student, done = self.env.pre_step()
 
-                # 3. Reconstruct the partial solution.
 
                 while not done:
                     problems = self.origin_problem[:, :, [0, 1]].clone().detach()
@@ -269,7 +255,7 @@ class VRPTester():
                         _, _, selected_teacher, selected_flag_teacher, selected_teacher2, selected_flag_teacher2, \
                             selected_student, selected_student1, selected_flag_student, selected_flag_student1 = \
                             self.model(state, self.env.selected_node_list, self.env.solution, current_step,
-                                       raw_data_capacity=self.env.raw_data_capacity)  # 更新被选择的点和概率
+                                       raw_data_capacity=self.env.raw_data_capacity)
 
                         par_selected_student_list1 = torch.cat((self.env.selected_student_list, selected_student[:, None]),dim=1)
                         par_selected_flag_student1 = torch.cat((self.env.selected_student_flag, selected_flag_student[:, None]), dim=1)
@@ -306,7 +292,7 @@ class VRPTester():
                 escape_time, _ = clock.get_est_string(1, 1)
 
                 self.logger.info(
-                    "RRC step{}, name:{}, gap:{:6f} %, Elapsed[{}], stu_l:{:5f} , opt_l:{:5f}".format(
+                    "DR step{}, name:{}, gap:{:6f} %, Elapsed[{}], stu_l:{:5f} , opt_l:{:5f}".format(
                          bbbb, name, ((current_best_length.mean() - self.optimal_length.mean()) / self.optimal_length.mean()).item() * 100,
                         escape_time,current_best_length.mean().item(), self.optimal_length.mean().item()))
 
@@ -315,7 +301,6 @@ class VRPTester():
                   / self.optimal_length.mean() * 100, '%', 'escape time:', escape_time,
                   f'optimal:{self.optimal_length.mean()}, current_best:{current_best_length.mean()}')
 
-            # 4. Cycle until the budget is consumed.
-            # self.env.valida_solution_legal(self.origin_problem, best_select_node_list)
+
 
             return self.optimal_length.mean().item(), current_best_length.mean().item(), self.env.problem_size

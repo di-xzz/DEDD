@@ -5,9 +5,9 @@ import numpy as np
 import torch
 import random
 
-from LEHD.TSP.TSPModel import TSPModel as Model
-from LEHD.TSP.TSPEnv import TSPEnv as Env
-from LEHD.utils.utils import *
+from DEDD.TSP.TSPModel import TSPModel as Model
+from DEDD.TSP.TSPEnv import TSPEnv as Env
+from DEDD.utils.utils import *
 
 
 class TSPTester():
@@ -16,16 +16,15 @@ class TSPTester():
                  model_params,
                  tester_params):
 
-        # save arguments
+
         self.env_params = env_params
         self.model_params = model_params
         self.tester_params = tester_params
 
-        # result folder, logger
+
         self.logger = getLogger(name='trainer')
         self.result_folder = get_result_folder()
 
-        # cuda
         USE_CUDA = self.tester_params['use_cuda']
         if USE_CUDA:
             cuda_device_num = self.tester_params['cuda_device_num']
@@ -37,17 +36,17 @@ class TSPTester():
             torch.set_default_tensor_type('torch.FloatTensor')
         self.device = device
 
-        # ENV and MODEL
+
         self.env = Env(**self.env_params)
         self.model = Model(**self.model_params)
 
-        # Restore
+ 
         model_load = tester_params['model_load']
         checkpoint_fullname = '{path}/checkpoint-{epoch}.pt'.format(**model_load)
         checkpoint = torch.load(checkpoint_fullname, map_location=device)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         torch.set_printoptions(precision=20)
-        # utility
+
         self.time_estimator = TimeEstimator()
         self.time_estimator_2 =  TimeEstimator()
 
@@ -97,9 +96,7 @@ class TSPTester():
 
             episode += batch_size
 
-            ############################
-            # Logs
-            ############################
+
             elapsed_time_str, remain_time_str = self.time_estimator.get_est_string(episode, test_num_episode)
             self.logger.info("episode {:3d}/{:3d}, Elapsed[{}], Remain[{}], Score_teacher:{:.4f},Score_studetnt: {:.4f},".format(
                 episode, test_num_episode, elapsed_time_str, remain_time_str, score_teacher,score_student,))
@@ -142,7 +139,7 @@ class TSPTester():
 
     def _test_one_batch(self, episode, batch_size,clock=None):
     
-        ####################################################################################
+
         random_seed = random.random
         torch.manual_seed(random_seed)
 
@@ -160,7 +157,7 @@ class TSPTester():
 
             current_step = 0
 
-            state, reward, reward_student, done = self.env.pre_step()  # state: data, first_node = current_node
+            state, reward, reward_student, done = self.env.pre_step()
 
             while not done:
 
@@ -185,7 +182,6 @@ class TSPTester():
 
             print('Get first complete solution!')
 
-            # 1. The complete solution is obtained.
 
             best_select_node_list = self.env.selected_node_list
             current_best_length = self.env._get_travel_distance_2(self.origin_problem, best_select_node_list)
@@ -195,26 +191,23 @@ class TSPTester():
             self.logger.info("greedy, name:{}, gap:{:4f} %,  Elapsed[{}], stu_l:{:4f} , opt_l:{:4f}".format(
                 name, gap, escape_time, current_best_length.mean().item(), self.optimal_length.mean().item()))
 
-            ####################################################
 
-            budget = self.env_params['RRC_budget']
+
+            budget = self.env_params['DR_budget']
 
             for bbbb in range(budget):
 
                 self.env.load_problems(episode, batch_size)
 
-                # 2. Randomly sample the partial solution
-
-                # random inverse
                 if_inverse = True
-                if_inverse_index = torch.randint(low=0, high=100, size=[1])[0]  # in [4,N]
+                if_inverse_index = torch.randint(low=0, high=100, size=[1])[0]
                 if if_inverse_index<50:
                     if_inverse=False
 
                 if if_inverse:
                     best_select_node_list = torch.flip(best_select_node_list,dims=[1])
 
-                # sample partial solution
+
                 partial_solution_length, first_node_index,length_of_subpath,double_solution = self.env.destroy_solution(self.env.problems,best_select_node_list )
 
                 before_reward = partial_solution_length
@@ -223,17 +216,16 @@ class TSPTester():
 
                 reset_state, _, _ = self.env.reset(self.env_params['mode'])
 
-                state, reward, reward_student, done = self.env.pre_step()  # state: data, first_node = current_node
+                state, reward, reward_student, done = self.env.pre_step()
 
-                # 3. Reconstruct the sub-problem
 
                 while not done:
                     if current_step == 0:
-                        selected_teacher = self.env.solution[:, -1]  # detination node
+                        selected_teacher = self.env.solution[:, -1]
                         selected_student = self.env.solution[:, -1]
 
                     elif current_step == 1:
-                        selected_teacher = self.env.solution[:, 0]  # starting node
+                        selected_teacher = self.env.solution[:, 0]
                         selected_student = self.env.solution[:, 0]
 
                     else:
@@ -249,13 +241,13 @@ class TSPTester():
                        
 
                     current_step += 1
-                    state, reward, reward_student, done = self.env.step(selected_teacher, selected_student)  # 更新 selected_teacher list 和 mask
+                    state, reward, reward_student, done = self.env.step(selected_teacher, selected_student)
 
                 ahter_repair_sub_solution = torch.roll(self.env.selected_node_list,shifts=-1,dims=1)
 
                 after_reward = reward_student
 
-                # 4. decide whether to accepect the reconstructed partial solution.
+
                 after_repair_complete_solution = self.decide_whether_to_repair_solution(ahter_repair_sub_solution,
                                                   before_reward, after_reward, first_node_index, length_of_subpath,
                                                                                         double_solution )
@@ -264,14 +256,13 @@ class TSPTester():
 
                 escape_time,_ = clock.get_est_string(1, 1)
                 gap =  ((current_best_length.mean() - self.optimal_length.mean()) / self.optimal_length.mean()).item() * 100
-                self.logger.info("RRC step{}, name:{}, gap:{:4f} %, Elapsed[{}], stu_l:{:4f} , opt_l:{:4f}".format(
+                self.logger.info("DR step{}, name:{}, gap:{:4f} %, Elapsed[{}], stu_l:{:4f} , opt_l:{:4f}".format(
                    bbbb,name,gap, escape_time,current_best_length.mean().item(), self.optimal_length.mean().item()))
 
             current_best_length = self.env._get_travel_distance_2(self.origin_problem, best_select_node_list)
             gap = (current_best_length.mean() - self.optimal_length.mean()) / self.optimal_length.mean() * 100
             print(name, f'current_best_length',gap , '%')
 
-            # 5. Cycle until the budget is consumed.
 
 
             return self.optimal_length.mean().item(),current_best_length.mean().item(), self.env.problem_size

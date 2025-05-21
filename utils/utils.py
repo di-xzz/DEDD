@@ -80,13 +80,11 @@ def create_logger(log_file=None):
     for hdlr in root_logger.handlers[:]:
         root_logger.removeHandler(hdlr)
 
-    # write to file
     fileout = logging.FileHandler(filename, mode=file_mode)
     fileout.setLevel(logging.INFO)
     fileout.setFormatter(formatter)
     root_logger.addHandler(fileout)
 
-    # write to console
     console = logging.StreamHandler(sys.stdout)
     console.setLevel(logging.INFO)
     console.setFormatter(formatter)
@@ -254,14 +252,14 @@ def util_save_log_image_with_label(result_file_prefix,
     fig = plt.gcf()
     fig.savefig('{}-{}.jpg'.format(result_file_prefix, file_name))
     plt.close(fig)
-# /public/home/luof/project/BQ-POMO/CVRP/utils/log_image_style/style_tsp_100.json
+
 
 def _build_log_image_plt(img_params,
                          result_log: LogData,
                          labels=None):
     assert type(result_log) == LogData, 'use LogData Class for result_log.'
 
-    # Read json
+
     folder_name = img_params['json_foldername']
     file_name = img_params['filename']
     log_image_config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), folder_name, file_name)
@@ -299,13 +297,13 @@ def _build_log_image_plt(img_params,
 
 
 def copy_all_src(dst_root):
-    # execution dir
+
     if os.path.basename(sys.argv[0]).startswith('ipykernel_launcher'):
         execution_path = os.getcwd()
     else:
         execution_path = os.path.dirname(sys.argv[0])
 
-    # home dir setting
+
     tmp_dir1 = os.path.abspath(os.path.join(execution_path, sys.path[0]))
     tmp_dir2 = os.path.abspath(os.path.join(execution_path, sys.path[1]))
 
@@ -314,7 +312,6 @@ def copy_all_src(dst_root):
     else:
         home_dir = tmp_dir1
 
-    # make target directory
     dst_path = os.path.join(dst_root, 'src')
 
     if not os.path.exists(dst_path):
