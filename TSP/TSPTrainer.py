@@ -5,10 +5,10 @@ import torch
 from torch.optim import Adam as Optimizer
 from torch.optim.lr_scheduler import MultiStepLR as Scheduler
 
-from LEHD.TSP.TSPModel import TSPModel as Model
-from LEHD.TSP.test import main_test
-from LEHD.TSP.TSPEnv import TSPEnv as Env
-from LEHD.utils.utils import *
+from DEDD.TSP.TSPModel import TSPModel as Model
+from DEDD.TSP.test import main_test
+from DEDD.TSP.TSPEnv import TSPEnv as Env
+from DEDD.utils.utils import *
 
 
 class TSPTrainer:
@@ -18,19 +18,19 @@ class TSPTrainer:
                  optimizer_params,
                  trainer_params):
 
-        # 设置参数
+
         self.env_params = env_params
         self.model_params = model_params
         self.optimizer_params = optimizer_params
         self.trainer_params = trainer_params
 
-        # result folder, logger
+
         self.logger = getLogger(name='trainer')
         self.result_folder = get_result_folder()
         self.result_log = LogData()
 
-        # cuda
-        USE_CUDA = self.trainer_params['use_cuda'] # True
+
+        USE_CUDA = self.trainer_params['use_cuda']
         if USE_CUDA:
             cuda_device_num = self.trainer_params['cuda_device_num']
             torch.cuda.set_device(cuda_device_num)
@@ -42,7 +42,7 @@ class TSPTrainer:
 
         random_seed = 123
         torch.manual_seed(random_seed)
-        # Main Components
+
         self.model = Model(**self.model_params)
 
         self.env = Env(**self.env_params)
@@ -50,7 +50,7 @@ class TSPTrainer:
         self.optimizer = Optimizer(self.model.parameters(), **self.optimizer_params['optimizer'])
         self.scheduler = Scheduler(self.optimizer, **self.optimizer_params['scheduler'])
 
-        # Restore
+
         self.start_epoch = 1
         model_load = trainer_params['model_load']
         if model_load['enable']:
@@ -63,7 +63,7 @@ class TSPTrainer:
             self.scheduler.last_epoch = model_load['epoch']-1
             self.logger.info('Saved Model Loaded !!')
 
-        # utility
+
         self.time_estimator = TimeEstimator()
 
     def run(self):
@@ -76,16 +76,13 @@ class TSPTrainer:
         for epoch in range(self.start_epoch, self.trainer_params['epochs']+1):
             self.logger.info('=================================================================')
             self.env.shuffle_data()
-            # Train
+
             train_score, train_student_score, train_loss = self._train_one_epoch(epoch)
             self.result_log.append('train_score', epoch, train_score)
             self.result_log.append('train_student_score', epoch, train_student_score)
             self.result_log.append('train_loss', epoch, train_loss)
             self.scheduler.step()
 
-            ############################
-            # Logs & Checkpoint
-            ############################
             elapsed_time_str, remain_time_str = self.time_estimator.get_est_string(epoch, self.trainer_params['epochs'])
             self.logger.info("Epoch {:3d}/{:3d}: Time Est.: Elapsed[{}], Remain[{}]".format(
                 epoch, self.trainer_params['epochs'], elapsed_time_str, remain_time_str))
@@ -94,7 +91,7 @@ class TSPTrainer:
             model_save_interval = self.trainer_params['logging']['model_save_interval']
             img_save_interval = self.trainer_params['logging']['img_save_interval']
 
-            if epoch > 1:  # save latest images, every epoch
+            if epoch > 1:
                 self.logger.info("Saving log_image")
                 image_prefix = '{}/latest'.format(self.result_folder)
                 util_save_log_image_with_label(image_prefix, self.trainer_params['logging']['log_image_params_1'],
@@ -159,7 +156,6 @@ class TSPTrainer:
                              .format(epoch, episode, train_num_episode, 100. * episode / train_num_episode,
                                      score_AM.avg, score_student_AM.avg, loss_AM.avg))
 
-        # Log Once, for each epoch
         self.logger.info('Epoch {:3d}: Train ({:3.0f}%)  Score: {:.4f}, Score_studetnt: {:.4f}, Loss: {:.4f}'
                          .format(epoch, 100. * episode / train_num_episode,
                                  score_AM.avg, score_student_AM.avg, loss_AM.avg))
@@ -168,37 +164,29 @@ class TSPTrainer:
 
     def _train_one_batch(self, episode,batch_size,epoch):
 
-        ###############################################
-        self.model.train()  # 模型设置为训练模式
-        self.env.load_problems(episode,batch_size)  # 加载训练集
-        # 重置状态
-        reset_state, _, _ = self.env.reset(self.env_params['mode'])  # reset_state shape: (batch, problem, 2)
+        self.model.train() 
+        self.env.load_problems(episode,batch_size)
+        reset_state, _, _ = self.env.reset(self.env_params['mode'])
 
-        prob_list = torch.ones(size=(batch_size, 0))  # 记录损失值
+        prob_list = torch.ones(size=(batch_size, 0))
 
-        state, reward,reward_student, done = self.env.pre_step()  # 重置一些用于记录进程的状态变量
+        state, reward,reward_student, done = self.env.pre_step()
 
         current_step=0
 
         while not done:
-            # 用 done 来作为当前的解是部分解还是完整解的标志位
-            # current_step记录当前节点是第几个构造节点
-            # current_step = 0 和 1 是最开始的两步，分别记录目标节点和起始节点
-            # selected_teacher 是已经被选择过的标签节点
-            # selected_student 是已经被选择过的神经网络构造的节点
-            # prob用于计算损失
             if current_step == 0:
-                selected_teacher = self.env.solution[:, -1] # destination node
+                selected_teacher = self.env.solution[:, -1] 
                 selected_student = self.env.solution[:, -1]
                 prob = torch.ones(self.env.solution.shape[0], 1)
             elif current_step == 1:
-                selected_teacher = self.env.solution[:, 0] # starting node
+                selected_teacher = self.env.solution[:, 0]
                 selected_student = self.env.solution[:, 0]
                 prob = torch.ones(self.env.solution.shape[0], 1)
 
             else:
                 selected_teacher, selected_teacher1, prob, prob1, probs, selected_student, selected_student1 = \
-                    self.model(state, self.env.selected_node_list, self.env.solution, current_step)  # 更新被选择的点和概率
+                    self.model(state, self.env.selected_node_list, self.env.solution, current_step)
 
                 loss_mean = -prob.type(torch.float64).log().mean()
                 loss_mean1 = -prob1.type(torch.float64).log().mean()
