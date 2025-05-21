@@ -193,7 +193,7 @@ class TSPTester():
 
 
 
-            budget = self.env_params['RRC_budget']
+            budget = self.env_params['DR_budget']
 
             for bbbb in range(budget):
 
@@ -256,7 +256,7 @@ class TSPTester():
 
                 escape_time,_ = clock.get_est_string(1, 1)
                 gap =  ((current_best_length.mean() - self.optimal_length.mean()) / self.optimal_length.mean()).item() * 100
-                self.logger.info("RRC step{}, name:{}, gap:{:4f} %, Elapsed[{}], stu_l:{:4f} , opt_l:{:4f}".format(
+                self.logger.info("DR step{}, name:{}, gap:{:4f} %, Elapsed[{}], stu_l:{:4f} , opt_l:{:4f}".format(
                    bbbb,name,gap, escape_time,current_best_length.mean().item(), self.optimal_length.mean().item()))
 
             current_best_length = self.env._get_travel_distance_2(self.origin_problem, best_select_node_list)
