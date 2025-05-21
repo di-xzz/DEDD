@@ -1,4 +1,3 @@
-# 解码器在输出时，最后一层注意力层和线性层不共享，两通道输出
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -42,7 +41,6 @@ class TSPModel(nn.Module):
         out = torch.cat((embedded_first_node_.unsqueeze(1), unselected_node_data,embedded_last_node_.unsqueeze(1)), dim=1)
 
         if self.mode == 'train':
-            # 这里probs是神经网络预测的节点的概率，而prob是标签节点被预测的概率
             probs1, probs2 = self.decoder(self.encoder(out), selected_node_list, selected_node_data)
 
             # selected_student1 = probs1.argmax(dim=1)  # shape: B
@@ -139,53 +137,7 @@ class TSP_Decoder(nn.Module):
 
         self.selected_node_emb = nn.Linear(2, embedding_dim, bias=True)
         self.selected_node_emb_att = nn.Linear(embedding_dim, embedding_dim, bias=True)
-
-
-    # def _get_new_data(self, data, selected_node_list, prob_size, B_V):
-    #
-    #     list = selected_node_list
-    #
-    #     new_list = torch.arange(prob_size)[None, :].repeat(B_V, 1)
-    #
-    #     new_list_len = prob_size - list.shape[1]  # shape: [B, V-current_step]
-    #
-    #     index_2 = list.type(torch.long)
-    #
-    #     index_1 = torch.arange(B_V, dtype=torch.long)[:, None].expand(B_V, index_2.shape[1])
-    #
-    #     new_list[index_1, index_2] = -2
-    #
-    #     unselect_list = new_list[torch.gt(new_list, -1)].view(B_V, new_list_len)
-    #
-    #     # ----------------------------------------------------------------------------
-    #
-    #     new_data = data
-    #
-    #     emb_dim = data.shape[-1]
-    #
-    #     new_data_len = new_list_len
-    #
-    #     index_2_ = unselect_list.repeat_interleave(repeats=emb_dim, dim=1)
-    #
-    #     index_1_ = torch.arange(B_V, dtype=torch.long)[:, None].expand(B_V, index_2_.shape[1])
-    #
-    #     index_3_ = torch.arange(emb_dim)[None, :].repeat(repeats=(B_V, new_data_len))
-    #
-    #     new_data_ = new_data[index_1_, index_2_, index_3_].view(B_V, new_data_len, emb_dim)
-    #
-    #     return new_data_
-
-    # def _get_encoding(self,encoded_nodes, node_index_to_pick):
-    #
-    #     batch_size = node_index_to_pick.size(0)
-    #     pomo_size = node_index_to_pick.size(1)
-    #     embedding_dim = encoded_nodes.size(2)
-    #
-    #     gathering_index = node_index_to_pick[:, :, None].expand(batch_size, pomo_size, embedding_dim)
-    #
-    #     picked_nodes = encoded_nodes.gather(dim=1, index=gathering_index)
-    #
-    #     return picked_nodes
+        
 
     def final_process(self, out, batch_size_V, problem_size, selected_node_list):
         props = F.softmax(out, dim=-1)
@@ -200,7 +152,7 @@ class TSP_Decoder(nn.Module):
 
         index_1_ = torch.arange(batch_size_V, dtype=torch.long)[:, None].expand(batch_size_V, selected_node_list.shape[1])  # shape: [B*(V-1), n]
         index_2_ = selected_node_list.type(torch.long)
-        new_props[index_1_, index_2_] = -2  # mask掉起点、终点和访问过的点
+        new_props[index_1_, index_2_] = -2
         index = torch.gt(new_props, -1).view(batch_size_V, -1)
 
         new_props[index] = props.ravel()
@@ -210,7 +162,7 @@ class TSP_Decoder(nn.Module):
     def forward(self,data,selected_node_list, selected_node_data):
 
         batch_size_V = data.shape[0]  # B
-        problem_size = data.shape[1] + selected_node_list.shape[1] - 2  # 完整解的节点数
+        problem_size = data.shape[1] + selected_node_list.shape[1] - 2
         new_data = data
         # new_data = data
         # # selected_node_list's shape: [B, current_step]
@@ -264,7 +216,7 @@ class TSP_Decoder(nn.Module):
         #
         # index_1_ = torch.arange(batch_size_V, dtype=torch.long)[:, None].expand(batch_size_V, selected_node_list.shape[1])  # shape: [B*(V-1), n]
         # index_2_ = selected_node_list.type(torch.long)
-        # new_props[index_1_, index_2_] = -2  # mask掉起点、终点和访问过的点
+        # new_props[index_1_, index_2_] = -2
         # index = torch.gt(new_props, -1).view(batch_size_V, -1)
         #
         # new_props[index] = props.ravel()
@@ -305,7 +257,6 @@ class EncoderLayer(nn.Module):
         return out3
 
 
-# 计算多头注意力
 class DecoderLayer(nn.Module):
     def __init__(self, **model_params):
         super().__init__()
@@ -444,31 +395,16 @@ def _get_encoding(encoded_nodes, node_index_to_pick):
 
 
 def _get_selected_data(data, selected_node_list, prob_size, B_V):
-    """
-    筛选出已经被选择的节点的嵌入向量，并生成一个新的数据张量。
 
-    参数：
-        data (torch.Tensor): 输入数据张量，形状为 [B_V, prob_size, emb_dim]。
-        selected_node_list (torch.Tensor): 已选择节点的列表，形状为 [B_V, k]，其中 k 是每批中选择的节点数。
-        prob_size (int): 问题规模，例如节点总数。
-        B_V (int): 批量大小。
-
-    返回：
-        torch.Tensor: 新的数据张量，形状为 [B_V, k, emb_dim]，包含已选择节点的嵌入向量。
-    """
-    # 创建一个形状为 [B_V, prob_size] 的张量，初始化为 -1
     new_list = -torch.ones((B_V, prob_size), dtype=torch.long)
 
-    # 将 selected_node_list 中的节点标记为 1
     index_1 = torch.arange(B_V, dtype=torch.long)[:, None].expand(B_V, selected_node_list.shape[1])
     index_2 = selected_node_list.type(torch.long)
     new_list[index_1, index_2] = 1
 
-    # 筛选出被标记为 1 的节点
     selected_mask = (new_list == 1)
     selected_indices = selected_mask.nonzero()  # 获取被选择节点的索引，形状为 [B_V * k, 2]
 
-    # 提取被选择节点的嵌入向量
     emb_dim = data.shape[-1]
     selected_data = data[selected_indices[:, 0], selected_indices[:, 1], :].view(B_V, -1, emb_dim)
 
