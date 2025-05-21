@@ -3,7 +3,7 @@ DEBUG_MODE = False
 USE_CUDA = not DEBUG_MODE
 CUDA_DEVICE_NUM = 0
 import torch
-# Path Config
+
 import os
 
 import sys
@@ -11,17 +11,15 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, "..")
 sys.path.insert(0, "../..")
 import logging
-from LEHD.utils.utils import create_logger, copy_all_src
-from LEHD.TSP.TSPTrainer import TSPTrainer as Trainer
+from DEDD.utils.utils import create_logger, copy_all_src
+from DEDD.TSP.TSPTrainer import TSPTrainer as Trainer
 
-##########################################################################################
-# parameters
 
 b = os.path.abspath(".").replace('\\', '/')
 
 mode = 'train'
 training_data_path = b+"/data/train_TSP100_n100w.txt"
-# training_data_path = b+"/data/test_TSP100_n1w.txt"
+
 
 env_params = {
     'data_path':training_data_path,
@@ -68,9 +66,9 @@ trainer_params = {
                },
                },
     'model_load': {
-        'enable': False,  # enable loading pre-trained model
-        'path': '.result/20230509_153705_train',  # directory path of pre-trained model and log files saved.
-        'epoch': 150,  # epoch version of pre-trained model to laod.
+        'enable': False,
+        'path': '.result/20230509_153705_train',
+        'epoch': 150,
                   }
     }
 
@@ -81,8 +79,7 @@ logger_params = {
     }
 }
 
-##########################################################################################
-# main
+
 
 def main():
     if DEBUG_MODE:
@@ -116,7 +113,6 @@ def _print_config():
     [logger.info(g_key + "{}".format(globals()[g_key])) for g_key in globals().keys() if g_key.endswith('params')]
 
 
-##########################################################################################
 
 if __name__ == "__main__":
     main()
