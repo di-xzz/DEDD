@@ -110,7 +110,7 @@ class TSPTrainer:
                 }
                 torch.save(checkpoint_dict, '{}/checkpoint-{}.pt'.format(self.result_folder, epoch))
 
-                score_optimal, score_student ,gap = main_test(epoch,self.result_folder,use_RRC=False,
+                score_optimal, score_student ,gap = main_test(epoch,self.result_folder,use_DR=False,
                                                               cuda_device_num=self.trainer_params['cuda_device_num'])
 
                 save_gap.append([score_optimal, score_student,gap])
