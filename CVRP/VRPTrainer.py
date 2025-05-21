@@ -5,10 +5,10 @@ import torch
 from torch.optim import Adam as Optimizer
 from torch.optim.lr_scheduler import MultiStepLR as Scheduler
 
-from LEHD.CVRP.VRPModel import VRPModel as Model
-from LEHD.CVRP.test import main_test
-from LEHD.CVRP.VRPEnv import VRPEnv as Env
-from LEHD.utils.utils import *
+from DEDD.CVRP.VRPModel import VRPModel as Model
+from DEDD.CVRP.test import main_test
+from DEDD.CVRP.VRPEnv import VRPEnv as Env
+from DEDD.utils.utils import *
 
 
 
@@ -19,22 +19,20 @@ class VRPTrainer:
                  optimizer_params,
                  trainer_params):
 
-        # save arguments
         self.env_params = env_params
         self.model_params = model_params
         self.optimizer_params = optimizer_params
         self.trainer_params = trainer_params
 
-        # result folder, logger
         self.logger = getLogger(name='trainer')
         self.result_folder = get_result_folder()
         self.result_log = LogData()
         random_seed = 22
         torch.manual_seed(random_seed)
-        # cuda
-        USE_CUDA = self.trainer_params['use_cuda'] # True
+
+        USE_CUDA = self.trainer_params['use_cuda']
         if USE_CUDA:
-            cuda_device_num = self.trainer_params['cuda_device_num'] # 0
+            cuda_device_num = self.trainer_params['cuda_device_num']
             torch.cuda.set_device(cuda_device_num)
             device = torch.device('cuda', cuda_device_num)
             torch.set_default_tensor_type('torch.cuda.FloatTensor')
@@ -42,14 +40,13 @@ class VRPTrainer:
             device = torch.device('cpu')
             torch.set_default_tensor_type('torch.FloatTensor')
 
-        # Main Components
+
         self.model = Model(**self.model_params)
-        self.env = Env(**self.env_params) # # {'problem_size': 100, 'pomo_size': 100}
+        self.env = Env(**self.env_params)
 
         self.optimizer = Optimizer(self.model.parameters(), **self.optimizer_params['optimizer'])
         self.scheduler = Scheduler(self.optimizer, **self.optimizer_params['scheduler'])
 
-        # Restore
         self.start_epoch = 1
         model_load = trainer_params['model_load']
         if model_load['enable']:
@@ -62,7 +59,6 @@ class VRPTrainer:
             self.scheduler.last_epoch = model_load['epoch']-1
             self.logger.info('Saved Model Loaded !!')
 
-        # utility
         self.time_estimator = TimeEstimator()
 
     def run(self):
@@ -76,17 +72,15 @@ class VRPTrainer:
         for epoch in range(self.start_epoch, self.trainer_params['epochs']+1):
             self.logger.info('=================================================================')
             self.env.shuffle_data()
-            # Train
+
             train_score, train_student_score, train_loss = self._train_one_epoch(epoch)
             self.result_log.append('train_score', epoch, train_score)
             self.result_log.append('train_student_score', epoch, train_student_score)
             self.result_log.append('train_loss', epoch, train_loss)
-            # LR Decay
+
             self.scheduler.step()
 
-            ############################
-            # Logs & Checkpoint
-            ############################
+
             elapsed_time_str, remain_time_str = self.time_estimator.get_est_string(epoch, self.trainer_params['epochs'])
             self.logger.info("Epoch {:3d}/{:3d}: Time Est.: Elapsed[{}], Remain[{}]".format(epoch, self.trainer_params['epochs'], elapsed_time_str, remain_time_str))
 
@@ -94,7 +88,7 @@ class VRPTrainer:
             model_save_interval = self.trainer_params['logging']['model_save_interval']
             img_save_interval = self.trainer_params['logging']['img_save_interval']
 
-            if epoch > 1:  # save latest images, every epoch
+            if epoch > 1:
                 self.logger.info("Saving log_image")
                 image_prefix = '{}/latest'.format(self.result_folder)
                 util_save_log_image_with_label(image_prefix, self.trainer_params['logging']['log_image_params_1'],self.result_log, labels=['train_score'])
@@ -111,7 +105,7 @@ class VRPTrainer:
                 }
                 torch.save(checkpoint_dict, '{}/checkpoint-{}.pt'.format(self.result_folder, epoch))
 
-                score_optimal, score_student ,gap = main_test(epoch,self.result_folder, use_RRC = False,
+                score_optimal, score_student ,gap = main_test(epoch,self.result_folder, use_DR = False,
                                                               cuda_device_num=self.trainer_params['cuda_device_num'])
 
                 save_gap.append([score_optimal, score_student,gap])
@@ -133,7 +127,7 @@ class VRPTrainer:
         score_student_AM = AverageMeter()
         loss_AM = AverageMeter()
 
-        train_num_episode = self.trainer_params['train_episodes'] # 100000
+        train_num_episode = self.trainer_params['train_episodes']
         episode = 0
         loop_cnt = 0
         while episode < train_num_episode:
@@ -151,11 +145,11 @@ class VRPTrainer:
 
 
             loop_cnt += 1
-            # if loop_cnt <= 10:
+
             self.logger.info('Epoch {:3d}: Train {:3d}/{:3d}({:1.1f}%)  Score: {:.4f}, Score_studetnt: {:.4f},  Loss: {:.4f}'
                              .format(epoch, episode, train_num_episode, 100. * episode / train_num_episode, score_AM.avg, score_student_AM.avg, loss_AM.avg))
 
-        # Log Once, for each epoch
+
         self.logger.info('Epoch {:3d}: Train ({:3.0f}%)  Score: {:.4f}, Score_studetnt: {:.4f}, Loss: {:.4f}'
                          .format(epoch, 100. * episode / train_num_episode,score_AM.avg, score_student_AM.avg, loss_AM.avg))
 
@@ -163,9 +157,9 @@ class VRPTrainer:
 
     def _train_one_batch(self, episode,batch_size,epoch):
 
-        self.model.train() # train状态
+        self.model.train()
 
-        self.env.load_problems(episode,batch_size) # 重新生成 problems
+        self.env.load_problems(episode,batch_size)
 
         reset_state, _, _ = self.env.reset(self.env_params['mode'])
 
@@ -179,7 +173,7 @@ class VRPTrainer:
         while not done:
 
             if current_step ==0:
-                # print('current_step', current_step)
+
                 selected_teacher = self.env.solution[:, 0, 0]
                 selected_flag_teacher = self.env.solution[:, 0, 1]
                 selected_student = selected_teacher
@@ -187,8 +181,7 @@ class VRPTrainer:
                 loss_mean1 = torch.tensor(0)
 
             else:
-# return loss_node1,loss_node2,selected_node_teacher,selected_flag_teacher,selected_node_teacher2,selected_flag_teacher2,\
-#             selected_node_student1,selected_node_student2,selected_flag_student1,selected_flag_student2
+
                 loss_node1, loss_node2, selected_teacher, selected_flag_teacher, _, _, \
                     selected_student, selected_student1, selected_flag_student, selected_flag_student1 = \
                     self.model(state, self.env.selected_node_list, self.env.solution, current_step,
@@ -206,9 +199,8 @@ class VRPTrainer:
                 self.optimizer.step()
 
             current_step+=1
-            # selected_teacher = selected_teacher.cpu()
-            # selected_flag_teacher = selected_flag_teacher.cpu()
-            state, reward, reward_student, done = self.env.step(selected_teacher, selected_student,selected_flag_teacher,selected_flag_student)  # 更新 selected_teacher list 和 mask
+
+            state, reward, reward_student, done = self.env.step(selected_teacher, selected_student,selected_flag_teacher,selected_flag_student)
 
             loss_list.append(loss_mean1)
 
