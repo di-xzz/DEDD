@@ -1,42 +1,34 @@
-##########################################################################################
+
 DEBUG_MODE = False
 USE_CUDA = not DEBUG_MODE
 CUDA_DEVICE_NUM = 1
 
-##########################################################################################
-# Path Config
+
 import os
 import sys
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, "..")  # for problem_def
-sys.path.insert(0, "../..")  # for utils
+sys.path.insert(0, "..") 
+sys.path.insert(0, "../..")
 import logging
 import numpy as np
-from LEHD.utils.utils import create_logger, copy_all_src
-from LEHD.CVRP.VRPTester import VRPTester as Tester
+from DEDD.utils.utils import create_logger, copy_all_src
+from DEDD.CVRP.VRPTester import VRPTester as Tester
 
-##########################################################################################
-# parameters
-
-# testing problem size
 problem_size = 1000
 
-# decode method: use RRC or not (greedy)
-Use_RRC = True
+Use_DR = True
 
-# RRC budget
-RRC_budget = 1000
+DR_budget = 1000
 
-########### model ###############
 model_load_path = 'result/20240415_120527_train'
 model_load_epoch = 40
 
-if not Use_RRC:
-    RRC_budget = 0
+if not Use_DR:
+    DR_budget = 0
 
 mode = 'test'
 test_paras = {
-   # problem_size: [filename, episode, batch]
+
     100: [ 'vrp100_test_lkh.txt',10000, 5000],
     200: ['vrp200_test_lkh.txt', 128, 128],
     500: ['vrp500_test_lkh.txt', 128, 128],
@@ -44,15 +36,13 @@ test_paras = {
 }
 
 
-##########################################################################################
-# parameters
 b = os.path.abspath(".").replace('\\', '/')
 
 env_params = {
     'mode': mode,
     'data_path': b + f"/data/{test_paras[problem_size][0]}",
     'sub_path': False,
-    'RRC_budget': RRC_budget
+    'DR_budget': DR_budget
 }
 
 
@@ -69,7 +59,7 @@ model_params = {
 tester_params = {
     'use_cuda': USE_CUDA,
     'cuda_device_num': CUDA_DEVICE_NUM,
-    'test_episodes': test_paras[problem_size][1],   # 65
+    'test_episodes': test_paras[problem_size][1],
     'test_batch_size': test_paras[problem_size][2],
 }
 
@@ -80,10 +70,8 @@ logger_params = {
     }
 }
 
-##########################################################################################
-# main
 
-def main_test(epoch,path,use_RRC=None,cuda_device_num=None):
+def main_test(epoch,path,use_DR=None,cuda_device_num=None):
     if DEBUG_MODE:
         _set_debug_mode()
     create_logger(**logger_params)
@@ -92,8 +80,8 @@ def main_test(epoch,path,use_RRC=None,cuda_device_num=None):
         'path': path,
         'epoch': epoch,
     }
-    if use_RRC is not None:
-        env_params['RRC_budget']=0
+    if use_DR is not None:
+        env_params['DR_budget']=0
     if cuda_device_num is not None:
         tester_params['cuda_device_num'] = cuda_device_num
     tester = Tester(env_params=env_params,
@@ -133,8 +121,6 @@ def _print_config():
     [logger.info(g_key + "{}".format(globals()[g_key])) for g_key in globals().keys() if g_key.endswith('params')]
 
 
-
-##########################################################################################
 
 if __name__ == "__main__":
     path = f'./{model_load_path}'
