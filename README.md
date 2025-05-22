@@ -5,8 +5,8 @@ This code is easy to read and use.You can just run train.py or test.py to train 
 
 ## dependencies
 + python>=3.8
-Pytorch 1.12.1 or 1.13
-numpy==1.23.3
-matplotlib==3.5.2
-tqdm==4.64.1
-pytz==2022.1
++ Pytorch 1.12.1 or 1.13
++ numpy==1.23.3
++ matplotlib==3.5.2
++ tqdm==4.64.1
++ pytz==2022.1
